@@ -1,61 +1,21 @@
 import os
 import open3d as o3d
 import numpy as np
-import argparse
-import pandas as pd
 
-def read_pointclouds(folder):
-    out = {}
-
-    for file in os.listdir(folder):
-        # read like this to delete custom attributes
-        pc = o3d.io.read_point_cloud(os.path.join(folder, file))
-        # remove colors if present, otherwise merge no work
-        pc.colors = o3d.utility.Vector3dVector()
-        pc = o3d.t.geometry.PointCloud.from_legacy(pc)
-        out[file] = pc
-
-    return out
-
-def merge_all(pointclouds):
-    pointcloud = pointclouds[0]
-    for pc in pointclouds[1:]:
-        pointcloud += pc
-    return pointcloud
+from tree_io import read_pointclouds, merge_pointclouds
 
 
-def down_sample(pc_folder):
-    filenames = [f for f in os.listdir(pc_folder) if f[-3:] == 'ply']
-
-    odir = os.path.join(pc_folder, "vis_ds")
-    if not os.path.exists(odir):
-        os.mkdir(odir)
-
-    for i, filename in enumerate(filenames):
-        pcl = o3d.io.read_point_cloud(os.path.join(pc_folder, filename))
-
-        pcl = pcl.voxel_down_sample(voxel_size=0.20)
-
-        out_path = os.path.join(odir, filename)
-
-        o3d.io.write_point_cloud(out_path, pcl)
-
-
-def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder, odir):
+def test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder, odir):
     pointclouds = list(tree_tiles_dict.values())
     pointclouds += list(understory_tiles_dict.values())
 
-    merged_pointcloud = merge_all(pointclouds)
+    merged_pointcloud = merge_pointclouds(pointclouds)
 
     max_bound = merged_pointcloud.get_max_bound().numpy()
     min_bound = merged_pointcloud.get_min_bound().numpy()
 
     bound_x_min = min_bound[0]
     bound_x_max = max_bound[0]
-
-
-    test_x_max = bound_x_min + 1/5*(bound_x_max - bound_x_min)
-    val_x_max = test_x_max + 1/5*(bound_x_max - bound_x_min)
 
     train_odir = os.path.join(odir, "trees", "train")
     if not os.path.exists(train_odir):
@@ -71,28 +31,19 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
     # Make mapping of tree file to unique number 
     filenames = [f for f in os.listdir(trees_folder) if f[-3:] == 'ply']
 
-    # Divide wytham plot into 80 tiles
-    # 10 across 135m. length x-axis
-    # 8 across 88m. length y-axis
-
-    # train/val/test division across x-axis
-
-    # 20 % test
-    # 20 % val
-    # 60 % train
-    # any tree with at least 5 meters of bbox over val is also assigned to val
-    # for train/val just put wherever center is
+    test_x_max = bound_x_min + 1/5*(bound_x_max - bound_x_min)
+    val_x_max = test_x_max + 1/5*(bound_x_max - bound_x_min)
 
     test_trees = []
     val_trees = []
     train_trees = []
 
-    print("dividing trees")
+    print("Dividing trees")
 
     for i, filename in enumerate(filenames):
         pcl = o3d.t.io.read_point_cloud(os.path.join(trees_folder, filename))
 
-        # add labels
+        # add labels of trees: semantic is 1, instances positive int starting at 0
 
         pcl.point.semantic = o3d.core.Tensor(np.ones(len(pcl.point.positions), dtype=np.int32)[:,None])
         pcl.point.instance = o3d.core.Tensor((i+1)*np.ones(len(pcl.point.positions), dtype=np.int32)[:,None])
@@ -102,19 +53,20 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
         bbox_min = pcl_bbox.min_bound
         bbox_max = pcl_bbox.max_bound
 
-        bbox_center = bbox_min + (bbox_max - bbox_min)/2
-
-        if bbox_center[0] < test_x_max:
+        # any tree that overlaps with test/val/train areas is
+        if bbox_min[0] < test_x_max:
             out_path = os.path.join(test_odir, filename)
+            o3d.t.io.write_point_cloud(out_path, pcl)
             test_trees.append(pcl)
-        elif bbox_center[0] < val_x_max or bbox_min[0] < (val_x_max - 5):
+        if bbox_min[0] < val_x_max and bbox_max[0] > test_x_max:
             out_path = os.path.join(val_odir, filename)
+            o3d.t.io.write_point_cloud(out_path, pcl)
             val_trees.append(pcl)
-        else:
+        if bbox_max[0] > val_x_max:
             out_path = os.path.join(train_odir, filename)
+            o3d.t.io.write_point_cloud(out_path, pcl)
             train_trees.append(pcl)
 
-        o3d.t.io.write_point_cloud(out_path, pcl)
 
     
     # merge all understory tiles that overlap with test, val and train areas
@@ -122,7 +74,7 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
     val_tiles = []
     train_tiles = []
 
-    print("dividing understory tiles")
+    print("Dividing understory tiles")
     
     for tile in understory_tiles_dict:
         pc = understory_tiles_dict[tile]
@@ -136,9 +88,9 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
         if max_bound_x > val_x_max:
             train_tiles.append(pc)
 
-    test_merged = merge_all(test_tiles)
-    val_merged = merge_all(val_tiles)
-    train_merged = merge_all(train_tiles)
+    test_merged = merge_pointclouds(test_tiles)
+    val_merged = merge_pointclouds(val_tiles)
+    train_merged = merge_pointclouds(train_tiles)
 
     # add terrain labels: semantic is 0, instance = -1
 
@@ -149,17 +101,18 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
     train_merged.point.semantic = o3d.core.Tensor(np.zeros(len(train_merged.point.positions), dtype=np.int32)[:,None])
     train_merged.point.instance = o3d.core.Tensor((-1)*np.ones(len(train_merged.point.positions), dtype=np.int32)[:,None])
 
-    print("merging trees and understory")
+    print("Merging trees and understory")
 
     # merge trees
-    test_trees_pc = merge_all(test_trees)
-    val_trees_pc = merge_all(val_trees)
-    train_trees_pc = merge_all(train_trees)
+    test_trees_pc = merge_pointclouds(test_trees)
+    val_trees_pc = merge_pointclouds(val_trees)
+    train_trees_pc = merge_pointclouds(train_trees)
 
     test_plot_pc = test_trees_pc + test_merged
     val_plot_pc = val_trees_pc + val_merged
     train_plot_pc = train_trees_pc + train_merged
 
+    print("Cutting areas")
 
     # slice merged test, val and train pointclouds into actual sizes
     test_max_bound = max_bound.copy()
@@ -181,6 +134,8 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
     val_sliced = val_plot_pc.crop(val_bbox)
     train_sliced = train_plot_pc.crop(train_bbox)
 
+    print("Writing areas")
+
     # write out test, val and train plots as temp
     o3d.t.io.write_point_cloud(os.path.join(odir, "test_merged.ply"), test_sliced)
     o3d.t.io.write_point_cloud(os.path.join(odir, "val_merged.ply"), val_sliced)
@@ -188,19 +143,63 @@ def trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder,
 
     return
 
+def trees_in_plot(plot, trees, odir, threshold = 0.9, output_all=True):
 
-def tile_area(merged_area, x_n, y_n, odir):
+    # function to detect if tree is entirely in plot
+    
+    odir_in_plot = os.path.join(odir, f"in_plot_th{threshold:.2f}")
+    odir_out_plot = os.path.join(odir, f"out_plot_th{threshold:.2f}")
 
-    OVERLAP = 5
+    if not os.path.exists(odir_in_plot):
+        os.makedirs(odir_in_plot)
+    if not os.path.exists(odir_out_plot):
+        os.makedirs(odir_out_plot)
+
+
+    # get bbox of plot (assumes plot is rectangular and axis-aligned)
+    max_bound = plot.get_max_bound().numpy()
+    min_bound = plot.get_min_bound().numpy()
+
+    plot_bbox = o3d.t.geometry.AxisAlignedBoundingBox(min_bound = min_bound, max_bound = max_bound)
+
+    # divide trees into inside and outside plot based on threshold value
+    for file in trees:
+        pc = trees[file]
+        in_idx = plot_bbox.get_point_indices_within_bounding_box(pc.point.positions)
+
+        n_in = np.sum(in_idx)
+        in_prop =  n_in / len(pc.point.positions.numpy())
+
+        if in_prop >= threshold:
+            out_path = os.path.join(odir_in_plot, file)
+        else:
+            out_path = os.path.join(odir_out_plot, file)
+
+        if n_in > 0 and output_all:
+            o3d.t.io.write_point_cloud(odir, file)
+
+        
+        o3d.t.io.write_point_cloud(out_path, pc)
+    
+    return
+
+def tile_area(merged_area, x_n, y_n, plot_name, odir, trees_odir=None, overlap=5):
 
     min_bound = merged_area.get_min_bound().numpy()
     max_bound = merged_area.get_max_bound().numpy()
 
-
-    x_tile_size = (max_bound[0] - min_bound[0] - OVERLAP) / x_n + OVERLAP
-    y_tile_size = (max_bound[1] - min_bound[1] - OVERLAP) / y_n + OVERLAP
+    x_tile_size = (max_bound[0] - min_bound[0] - overlap) / x_n + overlap
+    y_tile_size = (max_bound[1] - min_bound[1] - overlap) / y_n + overlap
 
     print(f"Tile sizes: {x_tile_size}, {y_tile_size}")
+
+    if trees_odir is not None:
+        trees = read_pointclouds(trees_odir)
+
+    
+    if overlap != 5:
+        odir = os.path.join(odir, f"overlap_{overlap}")
+        trees_odir = os.path.join(trees_odir, f"overlap_{overlap}")
 
     tile_n = 0
 
@@ -209,8 +208,8 @@ def tile_area(merged_area, x_n, y_n, odir):
     for i in range(x_n):
         for j in range(y_n):
             tile_min_bound = min_bound.copy()
-            tile_min_bound[0] += i*(x_tile_size - OVERLAP)
-            tile_min_bound[1] += j*(y_tile_size - OVERLAP)
+            tile_min_bound[0] += i*(x_tile_size - overlap)
+            tile_min_bound[1] += j*(y_tile_size - overlap)
 
             tile_max_bound = max_bound.copy()
             tile_max_bound[0] = tile_min_bound[0] + x_tile_size
@@ -219,8 +218,16 @@ def tile_area(merged_area, x_n, y_n, odir):
             tile_bbox = o3d.t.geometry.AxisAlignedBoundingBox(min_bound = tile_min_bound, max_bound = tile_max_bound)
             tile_pc = merged_area.crop(tile_bbox)
 
-            o3d.t.io.write_point_cloud(os.path.join(odir, f"Wytham_Tile{tile_n}.ply"), tile_pc)
+            cur_tile = f"{plot_name}_{tile_n}"
+
+            o3d.t.io.write_point_cloud(os.path.join(odir, f"{cur_tile}.ply"), tile_pc)
             tile_n += 1
+
+            # extra: keep track of trees on tile
+            if trees_odir is not None:
+                tile_trees_odir = os.path.join(trees_odir, cur_tile)
+
+                trees_in_plot(tile_pc, trees, tile_trees_odir, threshold=0.9, output_all=True)
 
             # TODO: temp: shift and save
             # tile_pc = tile_pc.translate(np.array([i*7, j*7, 0]))
@@ -229,60 +236,3 @@ def tile_area(merged_area, x_n, y_n, odir):
     # TODO: TEMP
     # o3d.visualization.draw_geometries(all_tiles)
     pass
-
-def tile_wytham(merged_area_dir):
-
-    # training area
-
-    odir = os.path.join(merged_area_dir, "tiles", "train")
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-    train_pc = o3d.t.io.read_point_cloud(os.path.join(merged_area_dir, "train_merged.ply"))
-
-    tile_area(train_pc, x_n=6, y_n=11, odir=odir)
-
-    # val area
-
-    odir = os.path.join(merged_area_dir, "tiles", "val")
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-    validation_pc = o3d.t.io.read_point_cloud(os.path.join(merged_area_dir, "val_merged.ply"))
-
-    tile_area(validation_pc, x_n=2, y_n=11, odir=odir)
-
-    # test area
-
-    odir = os.path.join(merged_area_dir, "tiles", "test")
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-    test_pc = o3d.t.io.read_point_cloud(os.path.join(merged_area_dir, "test_merged.ply"))
-
-    tile_area(test_pc, x_n=2, y_n=11, odir=odir)
-
-
-def main():
-    DATA_DIR = "/home/wcherlet/data/Wytham_cleaned/"
-    trees_folder = os.path.join(DATA_DIR, "trees")
-
-    TILE_DIR = "/home/wcherlet/data/Wytham_cleaned/seperated"
-
-    TREES_DIR = os.path.join(TILE_DIR, "trees_kd")
-    UNDERSTORY_DIR = os.path.join(TILE_DIR, "understory_kd")
-
-    tree_tiles_dict = read_pointclouds(TREES_DIR)
-    understory_tiles_dict = read_pointclouds(UNDERSTORY_DIR)
-
-    odir = os.path.join(DATA_DIR, "Wytham_train_split")
-    if not os.path.exists(odir):
-        os.mkdir(odir)
-
-    # trees_test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder, odir)
-
-    tile_wytham(odir)
-
-
-    return
-
-
-if __name__ == "__main__":
-    main()

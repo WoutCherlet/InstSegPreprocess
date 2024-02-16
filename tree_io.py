@@ -1,10 +1,19 @@
+#!/usr/bin/env python3
+
 import os
 import open3d as o3d
+
+__all__ = ['read_pointclouds', 'merge_pointclouds', 'down_sample_folder']
+
 
 def read_pointclouds(folder):
     out = {}
 
     for file in os.listdir(folder):
+        if not file[-4:] == ".ply":
+            print(file)
+            print("not ply")
+            continue
         # read like this to delete custom attributes
         pc = o3d.io.read_point_cloud(os.path.join(folder, file))
         # remove colors if present, otherwise merge no work

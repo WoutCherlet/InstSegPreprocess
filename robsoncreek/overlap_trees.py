@@ -1,5 +1,6 @@
 import os
 import sys
+import csv
 
 import numpy as np
 import open3d as o3d
@@ -38,7 +39,7 @@ def bbox_to_patch(bbox):
     rect = patches.Rectangle((x_min, y_min), extent_x, extent_y, linewidth=1, edgecolor='r', facecolor='none')
     return rect
 
-def plot_layout(plot_pc, tree_dict):
+def plot_layout(plot_pc, tree_dict, scanner_pos):
 
     # plot size
     max_plot = plot_pc.get_max_bound().numpy()
@@ -51,15 +52,15 @@ def plot_layout(plot_pc, tree_dict):
 
     # trees bbox
 
-    all_trees_pc = merge_pointclouds(list(tree_dict.values()))
+    # all_trees_pc = merge_pointclouds(list(tree_dict.values()))
 
-    max_trees = all_trees_pc.get_max_bound().numpy()
-    min_trees = all_trees_pc.get_min_bound().numpy()
+    # max_trees = all_trees_pc.get_max_bound().numpy()
+    # min_trees = all_trees_pc.get_min_bound().numpy()
 
-    print("Trees bbox size:")
-    print(f"Max bound: {max_trees}")
-    print(f"Min bound: {min_trees}")
-    print(f"Size: {max_trees - min_trees}")
+    # print("Trees bbox size:")
+    # print(f"Max bound: {max_trees}")
+    # print(f"Min bound: {min_trees}")
+    # print(f"Size: {max_trees - min_trees}")
 
     # get top down 2d view of plot and segmented trees
 
@@ -84,7 +85,15 @@ def plot_layout(plot_pc, tree_dict):
         scatter_y.append(tree_center[1])
         ax.add_patch(rect)
 
-    ax.scatter(scatter_x, scatter_y)
+    ax.scatter(scatter_x, scatter_y, color='red')
+
+    rect_50 = patches.Rectangle((-25,-25), 50, 50, linewidth=3, edgecolor='green', facecolor='none')
+    rect_70 = patches.Rectangle((-35,-35), 70, 70, linewidth=3, edgecolor='green', facecolor='none')
+
+    ax.add_patch(rect_50)
+    ax.add_patch(rect_70)
+
+    ax.scatter(scanner_pos[:,0], scanner_pos[:,1], color='black')
 
     plt.show()
 
@@ -149,18 +158,39 @@ def main():
     # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/plot_cut_2cm.ply"
     # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
 
-    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds/plot/plot_pc.ply"
-    trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds"
+    plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/tree_pcs"
+
+    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds/plot/plot_pc.ply"
+    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds"
+
+    # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds/plot/plot_pc.ply"
+    # trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds"
+
+    # scanner_pos_csv = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/RC_2018.csv"
+    scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
 
     plot = o3d.t.io.read_point_cloud(plot_file)
     trees = read_pointclouds(trees_folder)
 
-    # plot_layout(plot, trees)
+    # read scanner positions
+    # with open(scanner_pos_csv, 'r') as f:
+    #     csv_list = list(csv.reader(f, delimiter=","))
+
+    # scanner_pos = np.array(csv_list)[1:,1:4]
+    # scanner_pos = scanner_pos.astype(float)
+
+    # read scanner positions
+    scanner_pc = o3d.t.io.read_point_cloud(scanner_pos_ply)
+    scanner_pos = scanner_pc.point.positions.numpy()
+
+    plot_layout(plot, trees, scanner_pos)
 
     # trees["plot/plot_pc.ply"] = plot
     # ds_visualization(trees, odir="/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds")
+    # ds_visualization(trees, odir="/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds")
 
-    overlap_trees_naive(plot, trees)
+    # overlap_trees_naive(plot, trees)
 
     return
 

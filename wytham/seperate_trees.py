@@ -1,3 +1,7 @@
+'''
+NOTE: old file with confusing structure and hardcoded things, sorry if for some reason you need this in the future
+'''
+
 import os
 import pandas as pd
 from tqdm import tqdm

@@ -1,6 +1,7 @@
 import os
 import sys
 import csv
+import time
 
 import numpy as np
 import open3d as o3d
@@ -17,7 +18,7 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 
 from tree_io import read_pointclouds, merge_pointclouds
 
-from wytham.seperate_trees import isclose_nd, isin_nd
+from wytham.seperate_trees import isclose_nd
 
 
 def ds_visualization(pointclouds, odir):
@@ -102,64 +103,130 @@ def plot_layout(plot_pc, tree_dict, scanner_pos):
 
 def overlap_trees_naive(plot_pc, tree_dict):
 
+    # NOTE: very bad
+    assert False, "Don't use this it sucks"
+
     # loop through trees, check overlapping points in plot pc and mark as instance
+
+    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/segmented/"
+    if not os.path.exists(odir):
+        os.makedirs(odir)
 
     plot_points = plot_pc.point.positions.numpy()
 
     total_tree_mask = np.zeros(len(plot_points), dtype=np.int32)
-    total_tree_mask_exact = np.zeros(len(plot_points), dtype=np.int32)
+    # total_tree_mask_exact = np.zeros(len(plot_points), dtype=np.int32)
     i=1
+    instance_label_plot = np.zeros(len(plot_points), dtype=np.int32)
     for k in tree_dict:
         print(f"processing {k} ({i}/{len(tree_dict)})")
-        i += 1
-
-        # TODO: TEMP
-        if i > 5:
-            break
 
         tree_pc = tree_dict[k]
         tree_points = tree_pc.point.positions.numpy()
 
         row_match = isclose_nd(plot_points, np.asarray(tree_points))
-        row_match_exact = isin_nd(plot_points, np.asarray(tree_points))
+        # row_match_exact = isin_nd(plot_points, np.asarray(tree_points))
 
         # get total tree mask for total
         total_tree_mask = np.logical_or(total_tree_mask, row_match)
-        total_tree_mask_exact = np.logical_or(total_tree_mask_exact, row_match_exact)
-        
-    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/segmented/"
+        # total_tree_mask_exact = np.logical_or(total_tree_mask_exact, row_match_exact)
 
-    if not os.path.exists(odir):
-        os.makedirs(odir)
+        # update label array with instance ID
+        instance_label_plot[row_match] = i
+
+        if i % 10 == 0:
+            # back up results untill now
+            plot_pc.point.instance = o3d.core.Tensor(instance_label_plot[:, np.newaxis])
+            o3d.t.io.write_point_cloud(os.path.join(odir, f"plot_labeled_{i}_instances.ply"), plot_pc)
+
+        i += 1
+
+
+    plot_pc.point.instance = o3d.core.Tensor(instance_label_plot[:, np.newaxis])
+    o3d.t.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_pc)
         
     understory_mask = np.logical_not(total_tree_mask)
     understory_points = plot_points[understory_mask]
     understory_cloud = o3d.t.geometry.PointCloud()
     understory_cloud.point.positions = o3d.core.Tensor(understory_points)
     o3d.t.io.write_point_cloud(os.path.join(odir, "understory.ply"), understory_cloud)
-
-    # visual check
-    understory_vis = understory_cloud.to_legacy()
-    understory_vis.paint_uniform_color([0.5, 0.5, 0.5])
-
-    trees_t = list(tree_dict.values())
-    trees_list = [tree.to_legacy() for tree in trees_t]
-    trees_list.append(understory_vis)
-
-    o3d.visualization.draw_geometries(trees_list)
     
 
     return
 
 
+def overlap_trees_distance(plot_pc, tree_dict):
+
+    # for each tree:
+    # cut plot to bounding box + small buffer of couple cm
+    # calculate distance of each point in cut plot to tree
+    # if dist smaller than tolerance (1 cm or so): label point as tree
+    # add labels to entire plot pc using cut indices (hard part but should be possible)
+
+    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/segmented_distance/"
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+
+    odir_single_trees = os.path.join(odir, "bbox_trees")
+    if not os.path.exists(odir_single_trees):
+        os.makedirs(odir_single_trees)
+
+    plot_pc_legacy = plot_pc.to_legacy()
+    i=1
+    instance_labels_plot = np.zeros(len(plot_pc_legacy.points), dtype=np.int32)
+
+    for k in tree_dict:
+        print(f"({time.strftime('%Y-%m-%d %H:%M:%S')}) processing {k} ({i}/{len(tree_dict)})")
+        tree_pc = tree_dict[k]
+        tree_pc_legacy = tree_pc.to_legacy()
+
+        tree_bbox = tree_pc_legacy.get_axis_aligned_bounding_box()
+        # small buffer around tree
+        tree_bbox.max_bound = tree_bbox.max_bound + np.array([0.11, 0.11, 0.11])
+        tree_bbox.min_bound = tree_bbox.min_bound - np.array([0.11, 0.11, 0.11])
+
+        # get points in bbox around tree
+        inliers_indices = tree_bbox.get_point_indices_within_bounding_box(plot_pc_legacy.points)
+        inliers_pc = plot_pc_legacy.select_by_index(inliers_indices, invert=False)
+
+        # for points in bbox, calculate distance to tree and get their indices
+        distances = inliers_pc.compute_point_cloud_distance(tree_pc_legacy)
+        distances = np.asarray(distances)
+        tree_ind = np.where(distances < 0.1)[0]
+
+        # label original instance array
+        inliers_indices = np.asarray(inliers_indices)
+        plot_indices_tree = inliers_indices[tree_ind] # map mask on inlier indices to mask on original indices
+        instance_labels_plot[plot_indices_tree] = i
+        i += 1
+
+        # TODO: TEMP: write smaller pcs for debug
+        inliers_instance_labels = np.zeros(len(inliers_pc.points), dtype=np.int32)
+        inliers_instance_labels[tree_ind] = i
+        inliers_pc_t = o3d.t.geometry.PointCloud.from_legacy(inliers_pc)
+        inliers_pc_t.point.instance = o3d.core.Tensor(inliers_instance_labels[:,np.newaxis])
+        o3d.t.io.write_point_cloud(os.path.join(odir_single_trees, f"labeled_bbox_{k[-14:-4]}.ply"), inliers_pc_t)
+
+        # TODO: TEMP: backup every 20 instances
+        if i % 20 == 0:
+            # back up results untill now
+            plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
+            o3d.t.io.write_point_cloud(os.path.join(odir, f"plot_labeled_{i}_instances.ply"), plot_pc)
+        
+
+    plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
+    o3d.t.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_pc)
+
+    return
+
 
 def main():
 
-    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/plot_cut_2cm.ply"
-    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
+    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
 
-    plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
-    trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/tree_pcs"
+    # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    # trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/tree_pcs"
 
     # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds/plot/plot_pc.ply"
     # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds"
@@ -168,7 +235,7 @@ def main():
     # trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds"
 
     # scanner_pos_csv = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/RC_2018.csv"
-    scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
+    # scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
 
     plot = o3d.t.io.read_point_cloud(plot_file)
     trees = read_pointclouds(trees_folder)
@@ -181,16 +248,16 @@ def main():
     # scanner_pos = scanner_pos.astype(float)
 
     # read scanner positions
-    scanner_pc = o3d.t.io.read_point_cloud(scanner_pos_ply)
-    scanner_pos = scanner_pc.point.positions.numpy()
+    # scanner_pc = o3d.t.io.read_point_cloud(scanner_pos_ply)
+    # scanner_pos = scanner_pc.point.positions.numpy()
 
-    plot_layout(plot, trees, scanner_pos)
+    # plot_layout(plot, trees, scanner_pos)
 
     # trees["plot/plot_pc.ply"] = plot
     # ds_visualization(trees, odir="/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds")
     # ds_visualization(trees, odir="/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds")
 
-    # overlap_trees_naive(plot, trees)
+    overlap_trees_distance(plot, trees)
 
     return
 

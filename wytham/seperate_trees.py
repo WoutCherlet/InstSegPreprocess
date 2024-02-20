@@ -104,6 +104,10 @@ def isin_tolerance(A, B, tol):
     rval[rinvalid_mask] *=-1 # where we were at start of array, A was smaller then B so switch sign
     return np.minimum(lval, rval) <= tol # return a boolean array of A.shape where A is within tol distance of any element of B
 
+
+# NOTE: isclose and isin both work poorly!!
+
+
 def isclose_nd(a,b):
     a_rounded = np.around(a, decimals=2)
     b_rounded = np.around(b, decimals=2)

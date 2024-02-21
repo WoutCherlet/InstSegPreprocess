@@ -155,7 +155,7 @@ def overlap_trees_naive(plot_pc, tree_dict):
     return
 
 
-def overlap_trees_distance(plot_pc, tree_dict):
+def overlap_trees_distance(plot_pc, tree_dict, distance_th=0.1):
 
     # for each tree:
     # cut plot to bounding box + small buffer of couple cm
@@ -174,6 +174,7 @@ def overlap_trees_distance(plot_pc, tree_dict):
     plot_pc_legacy = plot_pc.to_legacy()
     i=1
     instance_labels_plot = np.zeros(len(plot_pc_legacy.points), dtype=np.int32)
+    leftover_mask = np.ones(len(plot_pc_legacy.points), dtype=np.int32)
 
     for k in tree_dict:
         print(f"({time.strftime('%Y-%m-%d %H:%M:%S')}) processing {k} ({i}/{len(tree_dict)})")
@@ -182,8 +183,8 @@ def overlap_trees_distance(plot_pc, tree_dict):
 
         tree_bbox = tree_pc_legacy.get_axis_aligned_bounding_box()
         # small buffer around tree
-        tree_bbox.max_bound = tree_bbox.max_bound + np.array([0.11, 0.11, 0.11])
-        tree_bbox.min_bound = tree_bbox.min_bound - np.array([0.11, 0.11, 0.11])
+        tree_bbox.max_bound = tree_bbox.max_bound + np.array([distance_th+0.01, distance_th+0.01, distance_th+0.01])
+        tree_bbox.min_bound = tree_bbox.min_bound - np.array([distance_th+0.01, distance_th+0.01, distance_th+0.01])
 
         # get points in bbox around tree
         inliers_indices = tree_bbox.get_point_indices_within_bounding_box(plot_pc_legacy.points)
@@ -192,12 +193,13 @@ def overlap_trees_distance(plot_pc, tree_dict):
         # for points in bbox, calculate distance to tree and get their indices
         distances = inliers_pc.compute_point_cloud_distance(tree_pc_legacy)
         distances = np.asarray(distances)
-        tree_ind = np.where(distances < 0.1)[0]
+        tree_ind = np.where(distances < distance_th)[0]
 
         # label original instance array
         inliers_indices = np.asarray(inliers_indices)
         plot_indices_tree = inliers_indices[tree_ind] # map mask on inlier indices to mask on original indices
         instance_labels_plot[plot_indices_tree] = i
+        leftover_mask[plot_indices_tree] = 0
         i += 1
 
         # TODO: TEMP: write smaller pcs for debug
@@ -212,18 +214,66 @@ def overlap_trees_distance(plot_pc, tree_dict):
             # back up results untill now
             plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
             o3d.t.io.write_point_cloud(os.path.join(odir, f"plot_labeled_{i}_instances.ply"), plot_pc)
-        
+    
+    leftover_pc = plot_pc_legacy.select_by_index(np.nonzero(leftover_mask))
+    o3d.io.write_point_cloud(os.path.join(odir, "leftover_points.ply"), leftover_pc)
 
     plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
     o3d.t.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_pc)
 
     return
 
+def split_quadrants(plot_file):
+
+    # split the plot into quadrants for segmentation
+
+    plot_pc = o3d.io.read_point_cloud(plot_file)
+
+    bbox_plot = plot_pc.get_axis_aligned_bounding_box()
+
+    plot_min_bound = bbox_plot.get_min_bound()
+    plot_max_bound = bbox_plot.get_max_bound()
+
+    max_bound_a = np.array([0,0,plot_max_bound[2]])
+    bbox_a = o3d.geometry.AxisAlignedBoundingBox(min_bound=plot_min_bound, max_bound = max_bound_a)
+
+    max_bound_b = np.array([0,plot_max_bound[1], plot_max_bound[2]])
+    min_bound_b = np.array([plot_min_bound[0], 0, plot_min_bound[2]])
+    bbox_b = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_b, max_bound = max_bound_b)
+
+    max_bound_c = np.array([plot_max_bound[0], 0, plot_max_bound[2]])
+    min_bound_c = np.array([0, plot_min_bound[1], plot_min_bound[2]])
+    bbox_c = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_c, max_bound = max_bound_c)
+
+    max_bound_d = np.array([plot_max_bound[0], plot_max_bound[1], plot_max_bound[2]])
+    min_bound_d = np.array([0, 0, plot_min_bound[2]])
+    bbox_d = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_d, max_bound = max_bound_d)
+
+    quad_a = plot_pc.crop(bbox_a)
+    quad_b = plot_pc.crop(bbox_b)
+    quad_c = plot_pc.crop(bbox_c)
+    quad_d = plot_pc.crop(bbox_d)
+
+    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/quadrants/"
+    
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+
+    o3d.io.write_point_cloud(os.path.join(odir, "quad_a.ply"), quad_a)
+    o3d.io.write_point_cloud(os.path.join(odir, "quad_b.ply"), quad_b)
+    o3d.io.write_point_cloud(os.path.join(odir, "quad_c.ply"), quad_c)
+    o3d.io.write_point_cloud(os.path.join(odir, "quad_d.ply"), quad_d)
+
+    return
+
+
+
+
 
 def main():
 
-    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
-    trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
+    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
 
     # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
     # trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/tree_pcs"
@@ -237,8 +287,8 @@ def main():
     # scanner_pos_csv = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/RC_2018.csv"
     # scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
 
-    plot = o3d.t.io.read_point_cloud(plot_file)
-    trees = read_pointclouds(trees_folder)
+    # plot = o3d.t.io.read_point_cloud(plot_file)
+    # trees = read_pointclouds(trees_folder)
 
     # read scanner positions
     # with open(scanner_pos_csv, 'r') as f:
@@ -257,7 +307,13 @@ def main():
     # ds_visualization(trees, odir="/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds")
     # ds_visualization(trees, odir="/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds")
 
-    overlap_trees_distance(plot, trees)
+    # overlap_trees_distance(plot, trees, distance_th=0.05)
+
+    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds/plot/plot_pc.ply"
+
+    split_quadrants(plot_file)
+
 
     return
 

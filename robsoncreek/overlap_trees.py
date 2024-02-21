@@ -2,6 +2,7 @@ import os
 import sys
 import csv
 import time
+import glob
 
 import numpy as np
 import open3d as o3d
@@ -215,8 +216,9 @@ def overlap_trees_distance(plot_pc, tree_dict, distance_th=0.1):
             plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
             o3d.t.io.write_point_cloud(os.path.join(odir, f"plot_labeled_{i}_instances.ply"), plot_pc)
     
-    leftover_pc = plot_pc_legacy.select_by_index(np.nonzero(leftover_mask))
-    o3d.io.write_point_cloud(os.path.join(odir, "leftover_points.ply"), leftover_pc)
+    leftover_pc = plot_pc_legacy.select_by_index(np.nonzero(leftover_mask)[0])
+    leftover_pc_t = o3d.t.geometry.PointCloud.from_legacy(leftover_pc)
+    o3d.t.io.write_point_cloud(os.path.join(odir, "leftover_points.ply"), leftover_pc_t)
 
     plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
     o3d.t.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_pc)
@@ -268,27 +270,46 @@ def split_quadrants(plot_file):
 
 
 
+def trees_in_quadrant(quadrant_file, tree_folder, odir):
+
+    if not os.path.exists(odir):
+        os.makedirs(odir)
+
+    quadrant_pc = o3d.t.io.read_point_cloud(quadrant_file)
+    tree_dict = read_pointclouds(tree_folder)
+
+    quadrant_bbox = quadrant_pc.get_axis_aligned_bounding_box()
+
+    for k in tree_dict:
+        tree_pc = tree_dict[k]
+
+        in_idx = quadrant_bbox.get_point_indices_within_bounding_box(tree_pc.point.positions).numpy()
+
+        if in_idx.size != 0:
+            o3d.t.io.write_pointcloud(os.path.join(odir, k), tree_pc)
+    
+    return
+
+def trees_quadrants(quadrants_dir, trees_dir):
+    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/quadrants"
+
+    for quadrant in glob.glob(os.path.join(quadrants_dir, "*.ply")):
+        odir_quadrant = os.path.join(odir, quadrant[:-4])
+
+        trees_in_quadrant(quadrant, trees_dir, odir_quadrant)
+
 
 
 def main():
 
-    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
-    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
-
-    # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
-    # trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/tree_pcs"
-
-    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds/plot/plot_pc.ply"
-    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds"
-
-    # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds/plot/plot_pc.ply"
-    # trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds"
+    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
 
     # scanner_pos_csv = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/RC_2018.csv"
     # scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
 
-    # plot = o3d.t.io.read_point_cloud(plot_file)
-    # trees = read_pointclouds(trees_folder)
+    plot = o3d.t.io.read_point_cloud(plot_file)
+    trees = read_pointclouds(trees_folder)
 
     # read scanner positions
     # with open(scanner_pos_csv, 'r') as f:
@@ -307,12 +328,11 @@ def main():
     # ds_visualization(trees, odir="/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds")
     # ds_visualization(trees, odir="/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds")
 
-    # overlap_trees_distance(plot, trees, distance_th=0.05)
+    overlap_trees_distance(plot, trees, distance_th=0.05)
 
-    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
-    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds/plot/plot_pc.ply"
+    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
 
-    split_quadrants(plot_file)
+    # split_quadrants(plot_file)
 
 
     return

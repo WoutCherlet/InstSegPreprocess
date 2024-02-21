@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import glob
 import open3d as o3d
 
 __all__ = ['read_pointclouds', 'merge_pointclouds', 'down_sample_folder']
@@ -9,17 +10,17 @@ __all__ = ['read_pointclouds', 'merge_pointclouds', 'down_sample_folder']
 def read_pointclouds(folder):
     out = {}
 
-    for file in os.listdir(folder):
+    for file in glob.glob(os.path.join(folder, "*.ply")):
         if not file[-4:] == ".ply":
             print(file)
             print("not ply")
             continue
         # read like this to delete custom attributes
-        pc = o3d.io.read_point_cloud(os.path.join(folder, file))
+        pc = o3d.io.read_point_cloud(file)
         # remove colors if present, otherwise merge no work
         pc.colors = o3d.utility.Vector3dVector()
         pc = o3d.t.geometry.PointCloud.from_legacy(pc)
-        out[file] = pc
+        out[os.path.basename(file)] = pc
 
     return out
 

@@ -40,6 +40,7 @@ def tile_wytham(merged_area_dir):
     test_pc = o3d.t.io.read_point_cloud(os.path.join(merged_area_dir, "test_merged.ply"))
 
     # for test: also divide trees into eval and non-eval trees
+    # TODO: RERUN WITH FIX TO TREES_IN_PLOT?
     test_trees = read_pointclouds(trees_odir)
     odir_trees = os.path.join(merged_area_dir, "test_trees_thresholded")
     trees_in_plot(test_pc, test_trees, odir_trees, threshold=0.9, output_all=True)

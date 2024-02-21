@@ -167,7 +167,7 @@ def trees_in_plot(plot, trees, odir, threshold = 0.9, output_all=True):
         pc = trees[file]
         in_idx = plot_bbox.get_point_indices_within_bounding_box(pc.point.positions)
 
-        n_in = np.sum(in_idx)
+        n_in = in_idx.numpy().shape[0]
         in_prop =  n_in / len(pc.point.positions.numpy())
 
         if in_prop >= threshold:
@@ -236,3 +236,14 @@ def tile_area(merged_area, x_n, y_n, plot_name, odir, trees_odir=None, overlap=5
     # TODO: TEMP
     # o3d.visualization.draw_geometries(all_tiles)
     pass
+
+
+
+if __name__ == "__main__":
+    plot = "/home/wcherlet/BenchmarkPaper/data/BASE/test_merged.ply"
+    tree_dir = "/home/wcherlet/BenchmarkPaper/data/BASE/trees/test/"
+    odir = "/home/wcherlet/BenchmarkPaper/data/BASE/trees/test_th_fix"
+
+    plot = o3d.t.io.read_point_cloud(plot)
+    trees = read_pointclouds(tree_dir)
+    trees_in_plot(plot, trees, odir, threshold=0.9, output_all=False)

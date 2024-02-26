@@ -1,8 +1,12 @@
 import os
+import sys
+
 import open3d as o3d
 import numpy as np
-import laspy
 import matplotlib.pyplot as plt
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(SCRIPT_DIR))
 
 from tree_io import read_txt, read_las
 
@@ -22,7 +26,10 @@ def viz_trees_on_tile(tile_file, trees_folder):
     trees = []
 
     for file in os.listdir(trees_folder):
-        tree = read_txt(os.path.join(trees_folder, file))
+
+        if file[-4:] == ".ply":
+            tree = o3d.t.io.read_point_cloud(os.path.join(trees_folder, file))
+        # tree = read_txt(os.path.join(trees_folder, file))
 
         color = np.random.choice(range(256), size=3)/ 256
 
@@ -31,10 +38,19 @@ def viz_trees_on_tile(tile_file, trees_folder):
 
         trees.append(legacy_tree)
 
-    tile = read_txt(tile_file)
+    if tile_file[-4:] == ".txt":
+        tile = read_txt(tile_file)
+    elif tile_file[-4:] == ".las":
+        tile = read_las(tile_file)
+    else:
+        print(f"Cant read tile {tile_file}")
+        return
+    
     legacy_tile = tile.to_legacy()
 
     trees.append(legacy_tile)
+
+    o3d.visualization.draw_geometries([legacy_tile])
 
     o3d.visualization.draw_geometries(trees)
 
@@ -54,7 +70,8 @@ def read_tiles(folder, extension=".txt"):
             else:
                 print(f"Unable to read file {file}")
                 continue
-
+            
+            # TODO: TEMP downsample for faster visualization
             pc = pc.voxel_down_sample(voxel_size=0.20)
 
             legacy_pc = pc.to_legacy()
@@ -64,6 +81,35 @@ def read_tiles(folder, extension=".txt"):
             # pcs.append(bbox)
 
     return pcs
+
+def compare_tiles(tile_file1, tile_file2):
+
+    tile1 = read_txt(tile_file1)
+
+    tile2 = read_txt(tile_file2)
+
+    # move next to each other
+    x_loc = tile1.get_min_bound().numpy()[0]
+    y_loc = tile1.get_max_bound().numpy()[1] + 5
+    z_loc = tile1.get_min_bound().numpy()[2]
+
+    translation = o3d.core.Tensor([x_loc, y_loc, z_loc]) - tile2.get_min_bound()
+
+    tile2 = tile2.translate(translation)
+
+    tile1_leg = tile1.to_legacy()
+    tile2_leg = tile2.to_legacy()
+
+    print(len(tile1_leg.points))
+    print(len(tile2_leg.points))
+
+    o3d.visualization.draw_geometries([tile1_leg, tile2_leg])
+
+    return
+
+    
+
+
 
 
 def litchfield_full_plot(understory_tiles, trees_parent_folder):
@@ -110,15 +156,27 @@ def get_xy_view(understory_tiles):
 
 def main():
 
-    FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_SEPT"
-    TILE_FILE = os.path.join(FOLDER, "tile_0_-20_SEP_US_OK.txt")
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_SEPT"
+    # TILE_FILE1 = os.path.join(FOLDER, "tile_0_-20_SEP_US_OK.txt")
 
-    PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_0_-20_BOMEN/September"
 
-    # viz_trees_on_tile(TILE_FILE, PC_FOLDER)
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
+    # TILE_FILE2 = os.path.join(FOLDER, "tile_0_-20_AUG_US_OK.txt")
+
+    # compare_tiles(TILE_FILE1, TILE_FILE2)
+
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/TILES_litchfield_sep_all36comb_AOI_dev50_refl-15_1cm/"
+    # TILE_FILE = os.path.join(FOLDER, "tile_0_-20.las")
+
+
+    FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
+    TILE_FILE = os.path.join(FOLDER, "tile_0_-20_AUG_US_OK.txt")
+    PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_0_-20_BOMEN/Augustus"
+
+    viz_trees_on_tile(TILE_FILE, PC_FOLDER)
 
     # get_xy_view(FOLDER)
-    litchfield_full_plot(FOLDER, PC_FOLDER)
+    # litchfield_full_plot(FOLDER, PC_FOLDER)
 
     return
 

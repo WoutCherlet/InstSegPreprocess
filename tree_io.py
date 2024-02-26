@@ -3,11 +3,13 @@
 import os
 import glob
 import open3d as o3d
+import numpy as np
+import laspy
 
-__all__ = ['read_pointclouds', 'merge_pointclouds', 'down_sample_folder']
+__all__ = ['read_ply_folder', 'merge_pointclouds', 'down_sample_ply_folder', 'read_txt', 'read_las']
 
 
-def read_pointclouds(folder):
+def read_ply_folder(folder):
     out = {}
 
     for file in glob.glob(os.path.join(folder, "*.ply")):
@@ -31,7 +33,7 @@ def merge_pointclouds(pointclouds):
     return pointcloud
 
 
-def down_sample_folder(pc_folder):
+def down_sample_ply_folder(pc_folder):
     filenames = [f for f in os.listdir(pc_folder) if f[-3:] == 'ply']
 
     odir = os.path.join(pc_folder, "vis_ds")
@@ -46,3 +48,17 @@ def down_sample_folder(pc_folder):
         out_path = os.path.join(odir, filename)
 
         o3d.io.write_point_cloud(out_path, pcl)
+
+def read_txt(file):
+    arr = np.loadtxt(file, dtype=float, skiprows=1)
+    o3d_pc = o3d.t.geometry.PointCloud()
+    o3d_pc.point.positions = o3d.core.Tensor(arr[:,:3])
+    return o3d_pc
+
+def read_las(file):
+    point_cloud = laspy.read(file)
+    points = np.vstack((point_cloud.x, point_cloud.y, point_cloud.z)).transpose()
+
+    o3d_pc = o3d.t.geometry.PointCloud()
+    o3d_pc.point.positions = o3d.core.Tensor(points)
+    return o3d_pc

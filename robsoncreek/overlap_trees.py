@@ -17,7 +17,7 @@ import matplotlib.patches as patches
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from tree_io import read_pointclouds, merge_pointclouds
+from tree_io import read_ply_folder, merge_pointclouds
 
 from wytham.seperate_trees import isclose_nd
 
@@ -164,13 +164,17 @@ def overlap_trees_distance(plot_pc, tree_dict, distance_th=0.1):
     # if dist smaller than tolerance (1 cm or so): label point as tree
     # add labels to entire plot pc using cut indices (hard part but should be possible)
 
-    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/segmented_distance/"
+    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/segmented_distance/1cm"
     if not os.path.exists(odir):
         os.makedirs(odir)
 
-    odir_single_trees = os.path.join(odir, "bbox_trees")
-    if not os.path.exists(odir_single_trees):
-        os.makedirs(odir_single_trees)
+    odir_bbox_trees = os.path.join(odir, "bbox_trees")
+    if not os.path.exists(odir_bbox_trees):
+        os.makedirs(odir_bbox_trees)
+
+    odir_segmented_trees = os.path.join(odir, "segmented_trees")
+    if not os.path.exists(odir_segmented_trees):
+        os.makedirs(odir_segmented_trees)
 
     plot_pc_legacy = plot_pc.to_legacy()
     i=1
@@ -196,6 +200,11 @@ def overlap_trees_distance(plot_pc, tree_dict, distance_th=0.1):
         distances = np.asarray(distances)
         tree_ind = np.where(distances < distance_th)[0]
 
+        # Save segmented tree to folder
+        tree_pc_segmented = inliers_pc.select_by_index(tree_ind, invert=False)
+        tree_pc_seg_t = o3d.t.geometry.PointCloud.from_legacy(tree_pc_segmented)
+        o3d.t.io.write_point_cloud(os.path.join(odir_segmented_trees, f"{k[-14:-4]}.ply"), tree_pc_seg_t)
+
         # label original instance array
         inliers_indices = np.asarray(inliers_indices)
         plot_indices_tree = inliers_indices[tree_ind] # map mask on inlier indices to mask on original indices
@@ -208,20 +217,26 @@ def overlap_trees_distance(plot_pc, tree_dict, distance_th=0.1):
         inliers_instance_labels[tree_ind] = i
         inliers_pc_t = o3d.t.geometry.PointCloud.from_legacy(inliers_pc)
         inliers_pc_t.point.instance = o3d.core.Tensor(inliers_instance_labels[:,np.newaxis])
-        o3d.t.io.write_point_cloud(os.path.join(odir_single_trees, f"labeled_bbox_{k[-14:-4]}.ply"), inliers_pc_t)
+        o3d.t.io.write_point_cloud(os.path.join(odir_bbox_trees, f"labeled_bbox_{k[-14:-4]}.ply"), inliers_pc_t)
 
         # TODO: TEMP: backup every 20 instances
-        if i % 20 == 0:
-            # back up results untill now
-            plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
-            o3d.t.io.write_point_cloud(os.path.join(odir, f"plot_labeled_{i}_instances.ply"), plot_pc)
+        # if i % 20 == 0:
+        #     # back up results untill now
+        #     plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
+        #     o3d.t.io.write_point_cloud(os.path.join(odir, f"plot_labeled_{i}_instances.ply"), plot_pc)
+
+
+    # TODO: segfault when writing pointcloud using tensor version, writing using legacy but takes double space
     
     leftover_pc = plot_pc_legacy.select_by_index(np.nonzero(leftover_mask)[0])
-    leftover_pc_t = o3d.t.geometry.PointCloud.from_legacy(leftover_pc)
-    o3d.t.io.write_point_cloud(os.path.join(odir, "leftover_points.ply"), leftover_pc_t)
+    o3d.io.write_point_cloud(os.path.join(odir, "leftover_points.ply"), leftover_pc)
+    # leftover_pc_t = o3d.t.geometry.PointCloud.from_legacy(leftover_pc)
+    # o3d.t.io.write_point_cloud(os.path.join(odir, "leftover_points.ply"), leftover_pc_t)
 
     plot_pc.point.instance = o3d.core.Tensor(instance_labels_plot[:, np.newaxis])
-    o3d.t.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_pc)
+    plot_legacy = plot_pc.to_legacy()
+    o3d.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_legacy)
+    # o3d.t.io.write_point_cloud(os.path.join(odir, "plot_labeled.ply"), plot_pc)
 
     return
 
@@ -256,7 +271,7 @@ def split_quadrants(plot_file):
     quad_c = plot_pc.crop(bbox_c)
     quad_d = plot_pc.crop(bbox_d)
 
-    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/quadrants/"
+    odir = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/quadrants/"
     
     if not os.path.exists(odir):
         os.makedirs(odir)
@@ -276,22 +291,23 @@ def trees_in_quadrant(quadrant_file, tree_folder, odir):
         os.makedirs(odir)
 
     quadrant_pc = o3d.t.io.read_point_cloud(quadrant_file)
-    tree_dict = read_pointclouds(tree_folder)
+    tree_dict = read_ply_folder(tree_folder)
 
     quadrant_bbox = quadrant_pc.get_axis_aligned_bounding_box()
 
     for k in tree_dict:
         tree_pc = tree_dict[k]
 
-        in_idx = quadrant_bbox.get_point_indices_within_bounding_box(tree_pc.point.positions).numpy()
+        in_idx = quadrant_bbox.get_point_indices_within_bounding_box(tree_pc.point.positions)
 
-        if in_idx.size != 0:
-            o3d.t.io.write_pointcloud(os.path.join(odir, k), tree_pc)
+        n_in = in_idx.numpy().shape[0]
+        if n_in != 0:
+            o3d.t.io.write_point_cloud(os.path.join(odir, k), tree_pc)
     
     return
 
 def trees_quadrants(quadrants_dir, trees_dir):
-    odir = "/media/wcherlet/Stor1/wout/data/RobsonCreek/quadrants"
+    odir = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/quadrants/"
 
     for quadrant in glob.glob(os.path.join(quadrants_dir, "*.ply")):
         odir_quadrant = os.path.join(odir, quadrant[:-4])
@@ -301,15 +317,15 @@ def trees_quadrants(quadrants_dir, trees_dir):
 
 
 def main():
-
-    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
-    trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
+    plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_1cm_1ha_buffer.ply"
+    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
+    trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/segmented_trees"
 
     # scanner_pos_csv = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/RC_2018.csv"
     # scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
 
     plot = o3d.t.io.read_point_cloud(plot_file)
-    trees = read_pointclouds(trees_folder)
+    trees = read_ply_folder(trees_folder)
 
     # read scanner positions
     # with open(scanner_pos_csv, 'r') as f:
@@ -328,12 +344,15 @@ def main():
     # ds_visualization(trees, odir="/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds")
     # ds_visualization(trees, odir="/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds")
 
-    overlap_trees_distance(plot, trees, distance_th=0.05)
+    # overlap_trees_distance(plot, trees, distance_th=0.05)
 
-    # plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_2cm_1ha_10mbuffer.ply"
+    # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/leftover_points.ply"
 
     # split_quadrants(plot_file)
 
+    quadrants_dir = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/quadrants"
+
+    trees_quadrants(quadrants_dir, trees_folder)
 
     return
 

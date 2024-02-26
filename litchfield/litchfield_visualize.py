@@ -4,19 +4,7 @@ import numpy as np
 import laspy
 import matplotlib.pyplot as plt
 
-def read_txt(file):
-    arr = np.loadtxt(file, dtype=float, skiprows=1)
-    o3d_pc = o3d.t.geometry.PointCloud()
-    o3d_pc.point.positions = o3d.core.Tensor(arr[:,:3])
-    return o3d_pc
-
-def read_las(file):
-    point_cloud = laspy.read(file)
-    points = np.vstack((point_cloud.x, point_cloud.y, point_cloud.z)).transpose()
-
-    o3d_pc = o3d.t.geometry.PointCloud()
-    o3d_pc.point.positions = o3d.core.Tensor(points)
-    return o3d_pc
+from tree_io import read_txt, read_las
 
 def viz_pc(pc):
     bbox = pc.to_legacy().get_axis_aligned_bounding_box()
@@ -50,12 +38,22 @@ def viz_trees_on_tile(tile_file, trees_folder):
 
     o3d.visualization.draw_geometries(trees)
 
-def read_tiles(folder):
+def read_tiles(folder, extension=".txt"):
     pcs = []
 
     for file in os.listdir(folder):
         if file[:4] == "tile":
-            pc = read_txt(os.path.join(folder, file))
+            real_extension = file[-4:]
+            if extension == ".txt" and real_extension == extension:
+                pc = read_txt(os.path.join(folder, file))
+            elif extension == ".las" and real_extension == extension:
+                pc = read_las(os.path.join(folder, file))
+            elif extension != real_extension:
+                print(f"Extension {real_extension} doesnt match given extension {extension}")
+                continue
+            else:
+                print(f"Unable to read file {file}")
+                continue
 
             pc = pc.voxel_down_sample(voxel_size=0.20)
 
@@ -66,8 +64,6 @@ def read_tiles(folder):
             # pcs.append(bbox)
 
     return pcs
-
-    
 
 
 def litchfield_full_plot(understory_tiles, trees_parent_folder):
@@ -114,10 +110,10 @@ def get_xy_view(understory_tiles):
 
 def main():
 
-    FOLDER = "/media/wcherlet/SSD WOUT/2019_ElizaSteffen_thesis/Understorey/OK_TILES_SEPT"
+    FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_SEPT"
     TILE_FILE = os.path.join(FOLDER, "tile_0_-20_SEP_US_OK.txt")
 
-    PC_FOLDER = "/media/wcherlet/SSD WOUT/2019_ElizaSteffen_thesis/Bomen/tile_0_-20_BOMEN/September"
+    PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_0_-20_BOMEN/September"
 
     # viz_trees_on_tile(TILE_FILE, PC_FOLDER)
 

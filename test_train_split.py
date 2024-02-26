@@ -242,8 +242,8 @@ def tile_area(merged_area, x_n, y_n, plot_name, odir, trees_odir=None, overlap=5
 if __name__ == "__main__":
     plot = "/home/wcherlet/BenchmarkPaper/data/BASE/test_merged.ply"
     tree_dir = "/home/wcherlet/BenchmarkPaper/data/BASE/trees/test/"
-    odir = "/home/wcherlet/BenchmarkPaper/data/BASE/trees/test_th_fix"
+    odir = "/home/wcherlet/BenchmarkPaper/data/BASE/test_trees_thresholded"
 
     plot = o3d.t.io.read_point_cloud(plot)
     trees = read_pointclouds(tree_dir)
-    trees_in_plot(plot, trees, odir, threshold=0.9, output_all=False)
+    trees_in_plot(plot, trees, odir, threshold=0.9, output_all=True)

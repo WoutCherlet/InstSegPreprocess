@@ -81,6 +81,7 @@ def trees_quadrants(quadrants_dir, trees_dir):
 
         trees_in_quadrant(quadrant, trees_dir, odir_quadrant)
 
+
 def main():
     plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_1cm_1ha_buffer.ply"
     trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/segmented_trees"
@@ -98,9 +99,6 @@ def main():
 
     return
 
-
-
 if __name__ == "__main__":
-
     main()
 

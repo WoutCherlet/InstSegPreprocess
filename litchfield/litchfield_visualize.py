@@ -8,18 +8,12 @@ import matplotlib.pyplot as plt
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from tree_io import read_txt, read_las
+from tree_io import read_pc, merge_pointclouds
 
 def viz_pc(pc):
     bbox = pc.to_legacy().get_axis_aligned_bounding_box()
     o3d.visualization.draw_geometries([pc.to_legacy(), bbox])
     return
-
-def merge_all(pointclouds):
-    pointcloud = pointclouds[0]
-    for pc in pointclouds[1:]:
-        pointcloud += pc
-    return pointcloud
 
 def viz_trees_on_tile(tile_file, trees_folder):
 
@@ -28,9 +22,7 @@ def viz_trees_on_tile(tile_file, trees_folder):
     for file in os.listdir(trees_folder):
 
         # TODO: change back to 
-        if file[-4:] == ".ply":
-            tree = o3d.t.io.read_point_cloud(os.path.join(trees_folder, file))
-        # tree = read_txt(os.path.join(trees_folder, file))
+        tree = read_pc(file)
 
         color = np.random.choice(range(256), size=3)/ 256
 
@@ -39,13 +31,7 @@ def viz_trees_on_tile(tile_file, trees_folder):
 
         trees.append(legacy_tree)
 
-    if tile_file[-4:] == ".txt":
-        tile = read_txt(tile_file)
-    elif tile_file[-4:] == ".las":
-        tile = read_las(tile_file)
-    else:
-        print(f"Cant read tile {tile_file}")
-        return
+    tile = read_pc(tile_file)
     
     legacy_tile = tile.to_legacy()
 
@@ -55,22 +41,12 @@ def viz_trees_on_tile(tile_file, trees_folder):
 
     o3d.visualization.draw_geometries(trees)
 
-def read_tiles(folder, extension=".txt"):
+def read_tiles(folder):
     pcs = []
 
     for file in os.listdir(folder):
         if file[:4] == "tile":
-            real_extension = file[-4:]
-            if extension == ".txt" and real_extension == extension:
-                pc = read_txt(os.path.join(folder, file))
-            elif extension == ".las" and real_extension == extension:
-                pc = read_las(os.path.join(folder, file))
-            elif extension != real_extension:
-                print(f"Extension {real_extension} doesnt match given extension {extension}")
-                continue
-            else:
-                print(f"Unable to read file {file}")
-                continue
+            pc = read_pc(file)
             
             # TODO: TEMP downsample for faster visualization
             pc = pc.voxel_down_sample(voxel_size=0.20)
@@ -85,9 +61,9 @@ def read_tiles(folder, extension=".txt"):
 
 def compare_tiles(tile_file1, tile_file2):
 
-    tile1 = read_txt(tile_file1)
+    tile1 = read_pc(tile_file1)
 
-    tile2 = read_txt(tile_file2)
+    tile2 = read_pc(tile_file2)
 
     # move next to each other
     x_loc = tile1.get_min_bound().numpy()[0]
@@ -108,16 +84,12 @@ def compare_tiles(tile_file1, tile_file2):
 
     return
 
-    
 
-
-
-
-def litchfield_full_plot(understory_tiles, trees_parent_folder):
+def litchfield_full_plot(understory_tiles, trees_parent_folder, august=True):
 
     pcs = read_tiles(understory_tiles)
 
-    merged_understory = merge_all(pcs)
+    merged_understory = merge_pointclouds(pcs)
 
     max_bound = merged_understory.get_max_bound()
     min_bound = merged_understory.get_min_bound()
@@ -128,6 +100,9 @@ def litchfield_full_plot(understory_tiles, trees_parent_folder):
 
     o3d.visualization.draw_geometries(pcs)
 
+    # TODO: place trees on tiles
+    # maybe not necessary anymore
+
 
 def get_xy_view(understory_tiles):
     tilenames = [f for f in sorted(os.listdir(understory_tiles)) if f[-3:] == 'txt']
@@ -137,7 +112,7 @@ def get_xy_view(understory_tiles):
     for tilename in tilenames:
         file = os.path.join(understory_tiles, tilename)
 
-        pc = read_txt(file)
+        pc = read_pc(file)
 
         center = (pc.get_max_bound().numpy() + pc.get_min_bound().numpy())/2
 
@@ -153,31 +128,51 @@ def get_xy_view(understory_tiles):
     plt.show()
 
 
-    
-
 def main():
+
+    ### COMPARE UNDERSTORY TILES
 
     # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_SEPT"
     # TILE_FILE1 = os.path.join(FOLDER, "tile_0_-20_SEP_US_OK.txt")
-
 
     # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
     # TILE_FILE2 = os.path.join(FOLDER, "tile_0_-20_AUG_US_OK.txt")
 
     # compare_tiles(TILE_FILE1, TILE_FILE2)
 
-    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/TILES_litchfield_sep_all36comb_AOI_dev50_refl-15_1cm/"
-    # TILE_FILE = os.path.join(FOLDER, "tile_0_-20.las")
+    # -----------------------------------
+
+    ### COMPARE FULL TILES
+
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_SEPT"
+    # TILE_FILE1 = os.path.join(FOLDER, "tile_0_-20_SEP_US_OK.txt")
+
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
+    # TILE_FILE2 = os.path.join(FOLDER, "tile_0_-20_AUG_US_OK.txt")
+
+    # compare_tiles(TILE_FILE1, TILE_FILE2)
+
+    # -----------------------------------
+
+    ### VISUALIZE TREES ON TILE
 
 
-    FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
-    TILE_FILE = os.path.join(FOLDER, "tile_0_-20_AUG_US_OK.txt")
-    PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_0_-20_BOMEN/Augustus"
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
+    # TILE_FILE = os.path.join(FOLDER, "tile_0_-20_AUG_US_OK.txt")
+    # PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_0_-20_BOMEN/Augustus"
 
-    viz_trees_on_tile(TILE_FILE, PC_FOLDER)
 
-    # get_xy_view(FOLDER)
-    # litchfield_full_plot(FOLDER, PC_FOLDER)
+    # viz_trees_on_tile(TILE_FILE, PC_FOLDER)
+
+    # -----------------------------------
+
+    ### VISUALIZE FULL PLOT
+
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
+    # PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/"
+    # AUGUST = TRUE
+
+    # litchfield_full_plot(FOLDER, PC_FOLDER, august=AUGUST)
 
     return
 

@@ -6,7 +6,7 @@ import open3d as o3d
 import numpy as np
 import laspy
 
-__all__ = ['read_ply_folder', 'merge_pointclouds', 'down_sample_ply_folder', 'read_txt', 'read_las']
+__all__ = ['read_ply_folder', 'merge_pointclouds', 'down_sample_ply_folder', 'read_pc', 'read_txt', 'read_las']
 
 
 def read_ply_folder(folder):
@@ -48,6 +48,19 @@ def down_sample_ply_folder(pc_folder):
         out_path = os.path.join(odir, filename)
 
         o3d.io.write_point_cloud(out_path, pcl)
+
+def read_pc(file):
+    ext = file[-4:]
+
+    if ext == ".txt":
+        return read_txt(file)
+    elif ext == ".las":
+        return read_las(file)
+    elif ext == ".ply":
+        return o3d.t.io.read_point_cloud(file)
+    else:
+        print(f"ERROR: cant read pc {file}")
+        return
 
 def read_txt(file):
     arr = np.loadtxt(file, dtype=float, skiprows=1)

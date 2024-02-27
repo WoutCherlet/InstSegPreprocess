@@ -27,6 +27,7 @@ def viz_trees_on_tile(tile_file, trees_folder):
 
     for file in os.listdir(trees_folder):
 
+        # TODO: change back to 
         if file[-4:] == ".ply":
             tree = o3d.t.io.read_point_cloud(os.path.join(trees_folder, file))
         # tree = read_txt(os.path.join(trees_folder, file))

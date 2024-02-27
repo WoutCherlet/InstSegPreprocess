@@ -2,13 +2,10 @@ import os
 import sys
 import csv
 import time
-import glob
 
 import numpy as np
 import open3d as o3d
 
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 
 # TODO: TEMP: actual scripts should be in seperate folder 
 # guido (python papa) says its an antipattern to have script inside package
@@ -17,89 +14,9 @@ import matplotlib.patches as patches
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from tree_io import read_ply_folder, merge_pointclouds
+from tree_io import read_ply_folder
 
 from wytham.seperate_trees import isclose_nd
-
-
-def ds_visualization(pointclouds, odir):
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-    if not os.path.exists(os.path.join(odir, "plot")):
-        os.makedirs(os.path.join(odir, "plot"))
-    for file_name in pointclouds:
-        pc = pointclouds[file_name]
-        ds = pc.voxel_down_sample(0.1)
-        o3d.t.io.write_point_cloud(os.path.join(odir, file_name), ds)
-    return
-
-
-def bbox_to_patch(bbox):
-    points = bbox.get_box_points().numpy()
-    x_min, y_min, _ = np.min(points, axis=0)
-    extent_x, extent_y = bbox.get_extent().numpy()[:2]
-    rect = patches.Rectangle((x_min, y_min), extent_x, extent_y, linewidth=1, edgecolor='r', facecolor='none')
-    return rect
-
-def plot_layout(plot_pc, tree_dict, scanner_pos):
-
-    # plot size
-    max_plot = plot_pc.get_max_bound().numpy()
-    min_plot = plot_pc.get_min_bound().numpy()
-
-    print("Plot size:")
-    print(f"Max bound: {max_plot}")
-    print(f"Min bound: {min_plot}")
-    print(f"Size: {max_plot - min_plot}")
-
-    # trees bbox
-
-    # all_trees_pc = merge_pointclouds(list(tree_dict.values()))
-
-    # max_trees = all_trees_pc.get_max_bound().numpy()
-    # min_trees = all_trees_pc.get_min_bound().numpy()
-
-    # print("Trees bbox size:")
-    # print(f"Max bound: {max_trees}")
-    # print(f"Min bound: {min_trees}")
-    # print(f"Size: {max_trees - min_trees}")
-
-    # get top down 2d view of plot and segmented trees
-
-    bbox_plot = plot_pc.get_axis_aligned_bounding_box()
-    rect = bbox_to_patch(bbox_plot)
-
-    fig, ax = plt.subplots()
-    ax.add_patch(rect)
-
-    scatter_x = []
-    scatter_y = []
-
-    for k in tree_dict:
-        tree = tree_dict[k]
-        bbox = tree.get_axis_aligned_bounding_box()
-
-        rect = bbox_to_patch(bbox)
-
-        tree_center = tree.get_center().numpy()
-
-        scatter_x.append(tree_center[0])
-        scatter_y.append(tree_center[1])
-        ax.add_patch(rect)
-
-    ax.scatter(scatter_x, scatter_y, color='red')
-
-    rect_50 = patches.Rectangle((-25,-25), 50, 50, linewidth=3, edgecolor='green', facecolor='none')
-    rect_70 = patches.Rectangle((-35,-35), 70, 70, linewidth=3, edgecolor='green', facecolor='none')
-
-    ax.add_patch(rect_50)
-    ax.add_patch(rect_70)
-
-    ax.scatter(scanner_pos[:,0], scanner_pos[:,1], color='black')
-
-    plt.show()
-
-    return
 
 
 def overlap_trees_naive(plot_pc, tree_dict):
@@ -240,124 +157,18 @@ def overlap_trees_distance(plot_pc, tree_dict, distance_th=0.1):
 
     return
 
-def split_quadrants(plot_file):
-
-    # split the plot into quadrants for segmentation
-
-    plot_pc = o3d.io.read_point_cloud(plot_file)
-
-    bbox_plot = plot_pc.get_axis_aligned_bounding_box()
-
-    plot_min_bound = bbox_plot.get_min_bound()
-    plot_max_bound = bbox_plot.get_max_bound()
-
-    max_bound_a = np.array([0,0,plot_max_bound[2]])
-    bbox_a = o3d.geometry.AxisAlignedBoundingBox(min_bound=plot_min_bound, max_bound = max_bound_a)
-
-    max_bound_b = np.array([0,plot_max_bound[1], plot_max_bound[2]])
-    min_bound_b = np.array([plot_min_bound[0], 0, plot_min_bound[2]])
-    bbox_b = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_b, max_bound = max_bound_b)
-
-    max_bound_c = np.array([plot_max_bound[0], 0, plot_max_bound[2]])
-    min_bound_c = np.array([0, plot_min_bound[1], plot_min_bound[2]])
-    bbox_c = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_c, max_bound = max_bound_c)
-
-    max_bound_d = np.array([plot_max_bound[0], plot_max_bound[1], plot_max_bound[2]])
-    min_bound_d = np.array([0, 0, plot_min_bound[2]])
-    bbox_d = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound_d, max_bound = max_bound_d)
-
-    quad_a = plot_pc.crop(bbox_a)
-    quad_b = plot_pc.crop(bbox_b)
-    quad_c = plot_pc.crop(bbox_c)
-    quad_d = plot_pc.crop(bbox_d)
-
-    odir = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/quadrants/"
-    
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-
-    o3d.io.write_point_cloud(os.path.join(odir, "quad_a.ply"), quad_a)
-    o3d.io.write_point_cloud(os.path.join(odir, "quad_b.ply"), quad_b)
-    o3d.io.write_point_cloud(os.path.join(odir, "quad_c.ply"), quad_c)
-    o3d.io.write_point_cloud(os.path.join(odir, "quad_d.ply"), quad_d)
-
-    return
-
-
-
-def trees_in_quadrant(quadrant_file, tree_folder, odir):
-
-    if not os.path.exists(odir):
-        os.makedirs(odir)
-
-    quadrant_pc = o3d.t.io.read_point_cloud(quadrant_file)
-    tree_dict = read_ply_folder(tree_folder)
-
-    quadrant_bbox = quadrant_pc.get_axis_aligned_bounding_box()
-
-    for k in tree_dict:
-        tree_pc = tree_dict[k]
-
-        in_idx = quadrant_bbox.get_point_indices_within_bounding_box(tree_pc.point.positions)
-
-        n_in = in_idx.numpy().shape[0]
-        if n_in != 0:
-            o3d.t.io.write_point_cloud(os.path.join(odir, k), tree_pc)
-    
-    return
-
-def trees_quadrants(quadrants_dir, trees_dir):
-    odir = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/quadrants/"
-
-    for quadrant in glob.glob(os.path.join(quadrants_dir, "*.ply")):
-        odir_quadrant = os.path.join(odir, quadrant[:-4])
-
-        trees_in_quadrant(quadrant, trees_dir, odir_quadrant)
-
-
 
 def main():
     plot_file = "/media/wcherlet/Stor1/wout/data/RobsonCreek/plot_pc/RC_2018_1cm_1ha_buffer.ply"
-    # trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
-    trees_folder = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/segmented_trees"
-
-    # scanner_pos_csv = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/RC_2018.csv"
-    # scanner_pos_ply = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/scanpositions2018.ply"
+    trees_folder = "/media/wcherlet/Stor1/wout/data/RobsonCreek/tree_pcs"
 
     plot = o3d.t.io.read_point_cloud(plot_file)
     trees = read_ply_folder(trees_folder)
 
-    # read scanner positions
-    # with open(scanner_pos_csv, 'r') as f:
-    #     csv_list = list(csv.reader(f, delimiter=","))
-
-    # scanner_pos = np.array(csv_list)[1:,1:4]
-    # scanner_pos = scanner_pos.astype(float)
-
-    # read scanner positions
-    # scanner_pc = o3d.t.io.read_point_cloud(scanner_pos_ply)
-    # scanner_pos = scanner_pc.point.positions.numpy()
-
-    # plot_layout(plot, trees, scanner_pos)
-
-    # trees["plot/plot_pc.ply"] = plot
-    # ds_visualization(trees, odir="/media/wcherlet/Stor1/wout/data/RobsonCreek/vis_ds")
-    # ds_visualization(trees, odir="/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/vis_ds")
-
     # overlap_trees_distance(plot, trees, distance_th=0.05)
 
-    # plot_file = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/leftover_points.ply"
-
-    # split_quadrants(plot_file)
-
-    quadrants_dir = "/media/wcherlet/SSD WOUT/BenchmarkPaper/RobsonCreek/segmented_distance/1cm/quadrants"
-
-    trees_quadrants(quadrants_dir, trees_folder)
 
     return
 
-
-
 if __name__ == "__main__":
-
     main()

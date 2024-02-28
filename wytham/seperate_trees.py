@@ -9,7 +9,7 @@ import open3d as o3d
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import read_clouds, combine_pcds, get_bbox
+from wytham.utils import read_clouds, get_bbox
 
 DATA_DIR = "/home/wcherlet/data/singletrees/Wytham2015"
 

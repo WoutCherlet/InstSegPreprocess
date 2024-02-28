@@ -1,8 +1,8 @@
 import os
 import open3d as o3d
 
-from tree_io import read_pointclouds
-from test_train_split import trees_in_plot, tile_area, test_train_split
+from tree_io import read_ply_folder
+from plots_utils import trees_in_plot, tile_area
 
 
 def tile_wytham(merged_area_dir):
@@ -41,7 +41,7 @@ def tile_wytham(merged_area_dir):
 
     # for test: also divide trees into eval and non-eval trees
     # TODO: RERUN WITH FIX TO TREES_IN_PLOT?
-    test_trees = read_pointclouds(trees_odir)
+    test_trees = read_ply_folder(trees_odir)
     odir_trees = os.path.join(merged_area_dir, "test_trees_thresholded")
     trees_in_plot(test_pc, test_trees, odir_trees, threshold=0.9, output_all=True)
 
@@ -68,8 +68,8 @@ def main():
     TREES_DIR = os.path.join(TILE_DIR, "trees_kd")
     UNDERSTORY_DIR = os.path.join(TILE_DIR, "understory_kd")
 
-    tree_tiles_dict = read_pointclouds(TREES_DIR)
-    understory_tiles_dict = read_pointclouds(UNDERSTORY_DIR)
+    tree_tiles_dict = read_ply_folder(TREES_DIR)
+    understory_tiles_dict = read_ply_folder(UNDERSTORY_DIR)
 
     # odir = os.path.join(DATA_DIR, "Wytham_train_split")
     odir = "/home/wcherlet/data/Wytham_train_split"

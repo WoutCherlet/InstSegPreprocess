@@ -6,11 +6,6 @@ import time
 import numpy as np
 import open3d as o3d
 
-
-# TODO: TEMP: actual scripts should be in seperate folder 
-# guido (python papa) says its an antipattern to have script inside package
-# but I just want some scripts that use some common utils
-# so fuck guido i guess
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 

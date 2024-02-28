@@ -9,7 +9,7 @@ import numpy as np
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from tree_io import read_pc, read_ply_folder
+from tree_io import read_pc, merge_pointclouds
 
 
 
@@ -110,23 +110,51 @@ def read_trees(FOLDER, prefix):
         out[os.path.basename(file)] = pc
     return out
 
+
+def tiles_to_pc(tile_folder):
+
+    pcs = []
+    for tile in glob.glob(os.path.join(tile_folder, "*.txt")):
+        pc = read_pc(tile)
+        pcs.append(pc)
+
+    merged_pc = merge_pointclouds(pcs)
+    o3d.t.io.write_point_cloud(os.path.join(tile_folder, "merged_pc.ply"), merged_pc)
+    return
+
+
+
 def main():
+
+
+    # ----------------------------
+    # OVERLAP TILES
     
     # NOTE: this was only necessary for September trees as they havent been manually segmented
     # but august trees are manual and clean enough so skip this
 
-    TILE_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/TILES_litchfield_sept_all36comb_AOI_dev50_refl-15_1cm/"
-    TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/"
-    ALL_TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/September/trees"
-    ODIR = "/media/wcherlet/Stor1/wout/data/Litchfield/September/reclassified_5cm"
+    # TILE_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/TILES_litchfield_sept_all36comb_AOI_dev50_refl-15_1cm/"
+    # TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/"
+    # ALL_TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/September/trees"
+    # ODIR = "/media/wcherlet/Stor1/wout/data/Litchfield/September/reclassified_5cm"
 
-    tile_names = get_tile_names(TREES_DIR)
-    print(tile_names)
+    # tile_names = get_tile_names(TREES_DIR)
+    # print(tile_names)
     # tiles = read_tiles(TILE_DIR, tile_names)
     # trees = read_trees(ALL_TREES_DIR, prefix=tile_names[0])
 
     # TODO: TEMP : run for single tile
     # overlap_distance(tiles[0], trees, ODIR, distance_th=0.05)
+
+    # ----------------------------
+    # MERGE UNDERSTORY TILES
+
+    TILE_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/Augustus/understory"
+
+    tiles_to_pc (TILE_FOLDER)
+
+
+
 
     return
 

@@ -66,19 +66,41 @@ def compare_tiles(tile_file1, tile_file2):
     return
 
 
-def litchfield_full_plot(understory_tiles, trees_parent_folder, august=True):
+def litchfield_full(understory_pc, trees_folder):
 
-    pcs = read_tiles(understory_tiles)
-    merged_understory = merge_pointclouds(pcs)
+    understory_plot = read_pc(understory_pc)
 
-    max_bound = merged_understory.get_max_bound()
-    min_bound = merged_understory.get_min_bound()
+    max_bound = understory_plot.get_max_bound().numpy()
+    min_bound = understory_plot.get_min_bound().numpy()
 
     print(f"Max_bound of plot: {max_bound}")
     print(f"Min_bound of plot: {min_bound}")
     print(f"Dimension of plot: {max_bound-min_bound}")
 
-    o3d.visualization.draw_geometries(pcs)
+    # read in trees
+    i = 1
+    trees = []
+    for file in glob.glob(os.path.join(trees_folder, "*.ply")):
+        tree = read_pc(file)
+
+        # clear attributes
+        tree_l = tree.to_legacy()
+        tree = o3d.t.geometry.PointCloud.from_legacy(tree_l, o3d.core.float64)
+
+        tree.point.semantic = o3d.core.Tensor(np.ones(len(tree.point.positions), dtype=np.int32)[:,None])
+        tree.point.instance = o3d.core.Tensor((i+1)*np.ones(len(tree.point.positions), dtype=np.int32)[:,None])
+        i += 1
+
+        trees.append(tree)
+
+    all_trees = merge_pointclouds(trees)
+
+    understory_plot.point.semantic = o3d.core.Tensor(np.zeros(len(understory_plot.point.positions), dtype=np.int32)[:,None])
+    understory_plot.point.instance = o3d.core.Tensor((-1)*np.ones(len(understory_plot.point.positions), dtype=np.int32)[:,None])
+
+    full_plot = understory_plot + all_trees
+
+    o3d.t.io.write_point_cloud(os.path.join("/media/wcherlet/Stor1/wout/data/Litchfield/Augustus/labeled_plot.ply"), full_plot)
 
     return
 
@@ -132,22 +154,21 @@ def main():
     ### VISUALIZE TREES ON TILE
 
 
-    FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
-    TILE_FILE = os.path.join(FOLDER, "tile_40_-60_AUG_US_OK.txt")
-    PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_40_-60_BOMEN/Augustus"
+    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
+    # TILE_FILE = os.path.join(FOLDER, "tile_40_-60_AUG_US_OK.txt")
+    # PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/tile_40_-60_BOMEN/Augustus"
 
 
-    viz_trees_on_tile(TILE_FILE, PC_FOLDER)
+    # viz_trees_on_tile(TILE_FILE, PC_FOLDER)
 
     # -----------------------------------
 
-    ### VISUALIZE FULL PLOT
+    ### LABEL FULL PLOT
 
-    # FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Understorey/OK_TILES_AUG"
-    # PC_FOLDER = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/"
-    # AUGUST = TRUE
+    TREES = "/media/wcherlet/Stor1/wout/data/Litchfield/Augustus/trees"
+    PLOT = "/media/wcherlet/Stor1/wout/data/Litchfield/Augustus/understory/merged_pc.ply"
 
-    # litchfield_full_plot(FOLDER, PC_FOLDER, august=AUGUST)
+    litchfield_full(PLOT, TREES)
 
     return
 

@@ -112,22 +112,21 @@ def read_trees(FOLDER, prefix):
 
 def main():
     
+    # NOTE: this was only necessary for September trees as they havent been manually segmented
+    # but august trees are manual and clean enough so skip this
 
-    # plan: only read in full tiles for which trees are present -> read in tree folders, get tilename and read .las file
-
-    TILE_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/TILES_litchfield_082019_all36comb_AOI_dev50_refl-15_1cm/"
+    TILE_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/TILES_litchfield_sept_all36comb_AOI_dev50_refl-15_1cm/"
     TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/2019_ElizaSteffen_thesis/Bomen/"
-    ALL_TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/Augustus/trees"
-    ODIR = "/media/wcherlet/Stor1/wout/data/Litchfield/Augustus/reclassified_5cm"
+    ALL_TREES_DIR = "/media/wcherlet/Stor1/wout/data/Litchfield/September/trees"
+    ODIR = "/media/wcherlet/Stor1/wout/data/Litchfield/September/reclassified_5cm"
 
-    # TODO: change back to full plot
     tile_names = get_tile_names(TREES_DIR)
-    print(tile_names[0])
-    tiles = read_tiles(TILE_DIR, [tile_names[0]])
-    trees = read_trees(ALL_TREES_DIR, prefix=tile_names[0])
+    print(tile_names)
+    # tiles = read_tiles(TILE_DIR, tile_names)
+    # trees = read_trees(ALL_TREES_DIR, prefix=tile_names[0])
 
     # TODO: TEMP : run for single tile
-    overlap_distance(tiles[0], trees, ODIR, distance_th=0.05)
+    # overlap_distance(tiles[0], trees, ODIR, distance_th=0.05)
 
     return
 

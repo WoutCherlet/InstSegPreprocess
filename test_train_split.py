@@ -2,7 +2,7 @@ import os
 import open3d as o3d
 import numpy as np
 
-from tree_io import read_pointclouds, merge_pointclouds
+from tree_io import read_ply_folder, merge_pointclouds
 
 
 def test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder, odir):
@@ -194,7 +194,7 @@ def tile_area(merged_area, x_n, y_n, plot_name, odir, trees_odir=None, overlap=5
     print(f"Tile sizes: {x_tile_size}, {y_tile_size}")
 
     if trees_odir is not None:
-        trees = read_pointclouds(trees_odir)
+        trees = read_ply_folder(trees_odir)
 
     
     if overlap != 5:
@@ -245,5 +245,5 @@ if __name__ == "__main__":
     odir = "/home/wcherlet/BenchmarkPaper/data/BASE/test_trees_thresholded"
 
     plot = o3d.t.io.read_point_cloud(plot)
-    trees = read_pointclouds(tree_dir)
+    trees = read_ply_folder(tree_dir)
     trees_in_plot(plot, trees, odir, threshold=0.9, output_all=True)

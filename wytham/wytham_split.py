@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import open3d as o3d
 
 from tree_io import merge_pointclouds
@@ -121,12 +122,12 @@ def test_train_split(tree_tiles_dict, understory_tiles_dict, trees_folder, odir)
     val_min_bound = min_bound.copy()
     val_min_bound[0] = test_x_max
 
-    test_min_bound = min_bound.copy()
-    test_min_bound[0] = val_x_max
+    train_min_bound = min_bound.copy()
+    train_min_bound[0] = val_x_max
 
     test_bbox = o3d.t.geometry.AxisAlignedBoundingBox(min_bound = min_bound, max_bound = test_max_bound)
     val_bbox = o3d.t.geometry.AxisAlignedBoundingBox(min_bound = val_min_bound, max_bound = val_max_bound)
-    train_bbox = o3d.t.geometry.AxisAlignedBoundingBox(min_bound = test_min_bound, max_bound = max_bound)
+    train_bbox = o3d.t.geometry.AxisAlignedBoundingBox(min_bound = train_min_bound, max_bound = max_bound)
 
     test_sliced = test_plot_pc.crop(test_bbox)
     val_sliced = val_plot_pc.crop(val_bbox)
